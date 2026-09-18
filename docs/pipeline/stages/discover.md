@@ -21,6 +21,7 @@ Primeira etapa do pipeline. Transforma um problema em um escopo construível, co
 ## Sai
 
 - `recon.md` — o estado atual, conforme [[pipeline/templates/recon|o template]]. Só quando o repositório já tem código.
+- `ux-spec.md` — fluxo, estados, texto e acessibilidade, conforme [[pipeline/templates/ux-spec|o template]]. Só quando o incremento tem interface de usuário, e sempre **antes** dos critérios: os estados daqui viram critérios.
 - `increment-spec.md` — conforme [[pipeline/templates/increment-spec|o template]].
 - `cycle.md` — a nota-hub do ciclo, criada na primeira execução. Sem ela o ciclo não existe no grafo.
 - Uma linha em [[pipeline/backlog|backlog]] para cada fatia que ficou de fora, com o motivo.
@@ -32,6 +33,7 @@ Primeira etapa do pipeline. Transforma um problema em um escopo construível, co
 | `recon` | O estado atual, o que não pode quebrar, as convenções em vigor | antes de tudo, e só se o repo já tem código |
 | `problem-framer` | Quem sofre, a evidência, o custo de não agir | em paralelo com o shaper |
 | `solution-shaper` | Incrementos candidatos como fatias verticais, com valor e prioridade | em paralelo com o framer |
+| `ux-designer` | Fluxo, estados, texto e acessibilidade — os estados viram critério | depois do incremento reconciliado, e antes do `criteria-writer` |
 | `criteria-writer` | DoR, DoD e critérios de aceite por item | depois do incremento reconciliado |
 
 Um ciclo pequeno dispensa o framer. Um ajuste de uma linha precisa só do `criteria-writer`.

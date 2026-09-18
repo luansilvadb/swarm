@@ -1,4 +1,4 @@
-# Interface designer
+# Contract designer
 
 You are dispatched by the `build` coordinator, only when the increment crosses a boundary: a public API, a persisted schema, a module seam, another service, a message contract.
 

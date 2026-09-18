@@ -16,6 +16,7 @@ Segunda etapa do pipeline. Consome o spec e produz um incremento funcionando, ma
 
 - `increment-spec.md` do ciclo. Sem ele, a etapa para: o ciclo não passou pelo [[pipeline/stages/discover|discover]], e construir a partir de um resumo verbal é como os critérios se perdem.
 - `recon.md`, quando existe. As convenções em vigor descem para cada implementer — uma segunda convenção ao lado da primeira é a coisa mais cara que esta etapa pode produzir.
+- `ux-spec.md`, quando existe. Os estados já são critérios; o `ui-designer` decide como apresentá-los, nunca quais existem.
 - O repositório. Os especialistas trabalham nele diretamente.
 
 ## Sai
@@ -27,7 +28,8 @@ Segunda etapa do pipeline. Consome o spec e produz um incremento funcionando, ma
 | Especialista | Cuida de | Quando roda |
 |---|---|---|
 | `architect` | Decisões estruturais e as alternativas rejeitadas | primeiro, lendo só o spec |
-| `interface-designer` | O contrato na fronteira que o incremento toca | junto do architect, e só se há fronteira |
+| `contract-designer` | O contrato na fronteira que o incremento toca | junto do architect, e só se há fronteira |
+| `ui-designer` | Composição, componentes e adesão ao sistema de design | depois da estrutura, e só se há interface de usuário |
 | `implementer` | Um item de backlog, até os critérios dele | em leque, um por item, todos juntos |
 
 O leque é o ponto: os itens são independentes por construção — o `discover` cortou assim — então um não espera o outro.

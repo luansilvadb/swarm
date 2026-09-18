@@ -10,7 +10,7 @@ tags:
   - pipeline/paradigma
 ---
 
-Três regras geram tudo o que este pipeline faz. Onze pedidos foram reduzidos a elas — Scrum, spec-driven, wiki, Obsidian, grafo, TDD, orquestrador, especialistas, RAG, greenfield, brownfield. O resto é consequência, e tratar consequência como item de checklist é o overhead que este paradigma existe para evitar.
+Três regras geram tudo o que este pipeline faz. Doze pedidos foram reduzidos a elas — Scrum, spec-driven, wiki, Obsidian, grafo, TDD, orquestrador, especialistas, RAG, UI/UX, greenfield, brownfield. O resto é consequência, e tratar consequência como item de checklist é o overhead que este paradigma existe para evitar.
 
 ## As três regras
 
@@ -45,6 +45,7 @@ Daqui saem o incremento, o DoR/DoD e a aresta de retroalimentação: o que não 
 | Orquestrador / líder | regra 2 — o coordenador é o líder da etapa |
 | Especialistas | regra 2 — cada especialista é um nó |
 | RAG | consumidor da regra 1 — o vault *é* o corpus |
+| UI/UX | regra 1 — os estados da interface são contrato e viram critério antes do código; regra 2 — são dois nós, um em cada etapa |
 | Greenfield | aresta condicional: sem código existente, o `recon` não roda |
 | Brownfield | aresta condicional: com código existente, o `recon` roda e o spec nasce ancorado |
 

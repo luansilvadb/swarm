@@ -13,11 +13,12 @@ Read [`contract.md`](../../../docs/pipeline/contract.md) first — it holds the 
 ## Inputs
 
 - `<cycle-dir>/increment-spec.md`. If it does not exist, stop: the cycle has not been through `discover`, and building from a verbal summary is how the criteria get lost.
+- `<cycle-dir>/ux-spec.md`, when `discover` produced one. Its states are already criteria; the interface design decides how they are presented, never which ones exist.
 - The repository. Your specialists work in it directly.
 
 ## Steps
 
-1. **Decide the structure before writing code.** Dispatch `architect` with the spec. Dispatch `interface-designer` in the same batch **only if** the increment crosses a boundary the spec names — a public API, a persisted schema, a module seam, another service. Both read only the spec, so they run together.
+1. **Decide the structure before writing code.** Dispatch `architect` with the spec. Dispatch `contract-designer` in the same batch **only if** the increment crosses a boundary the spec names — a public API, a persisted schema, a module seam, another service. Both read only the spec, so they run together.
 
    *Completion criterion*: every structural decision returned names the alternative it was chosen over and the reason. A decision with one visible option was not a decision — send it back.
 
@@ -25,7 +26,7 @@ Read [`contract.md`](../../../docs/pipeline/contract.md) first — it holds the 
 
    *Completion criterion*: every item in the spec is accounted for — implemented, or reported blocked with the reason. An item silently dropped is the failure this step exists to catch.
 
-3. **Integrate and write `build-report.md`.** Confirm the increment actually holds together in the repository: it runs, the items compose, nothing was duplicated between two implementers who could not see each other. Record the structural decisions, per-item status, and what a verifier should be suspicious of. Record each item's **first red run** too: the check that failed before the code existed is the only evidence that the check can fail at all. Start from `docs/pipeline/templates/build-report.md` and keep its headings and frontmatter keys — loose prose here is what breaks the graph.
+4. **Integrate and write `build-report.md`.** Confirm the increment actually holds together in the repository: it runs, the items compose, nothing was duplicated between two implementers who could not see each other. Record the structural decisions, per-item status, and what a verifier should be suspicious of. Record each item's **first red run** too: the check that failed before the code existed is the only evidence that the check can fail at all. Start from `docs/pipeline/templates/build-report.md` and keep its headings and frontmatter keys — loose prose here is what breaks the graph.
 
    *Completion criterion*: `verify` can run the increment without asking how — the report names the command, the entry point and any setup.
 
@@ -34,7 +35,8 @@ Read [`contract.md`](../../../docs/pipeline/contract.md) first — it holds the 
 | Specialist | Owns |
 |---|---|
 | `specialists/architect.md` | Structural decisions and the alternatives rejected |
-| `specialists/interface-designer.md` | The contract across the boundary the increment touches |
+| `specialists/contract-designer.md` | The contract across the boundary the increment touches |
+| `specialists/ui-designer.md` | Composition, components and adherence to the design system in force |
 | `specialists/implementer.md` | One backlog item, implemented to its criteria |
 
 ## Boundaries

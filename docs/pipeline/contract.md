@@ -37,6 +37,7 @@ Duas consequências, porque um pipeline desenhado como cadeia serial perde as du
 - **`verify` tem duas entradas, não uma.** O modo `plan` roda só com o `increment-spec`, portanto é paralelo ao `build`, não posterior a ele. O modo `gate` precisa do `build-report`. A prova deriva dos critérios, nunca do código — é exatamente por isso que ela não precisa esperar.
 - **Itens de backlog são nós independentes.** Dentro do `build`, a implementação de um item não é entrada de outro, porque o `discover` cortou assim. Eles se abrem em leque.
 - **Greenfield e brownfield não são pipelines diferentes.** É uma aresta condicional: o `recon` roda quando o repositório já tem código, e não roda quando não tem. Etapas, artefatos e critérios de conclusão são os mesmos — muda só a entrada do `discover`.
+- **UI/UX não é um nó, são dois — e em etapas diferentes.** O UX roda dentro do `discover`, depois da reconciliação e **antes** dos critérios: os estados da interface são critérios de aceite, e um critério escrito antes de o estado existir é escrito da imaginação. O UI roda dentro do `build`, depois da estrutura: decide apresentação, nunca fluxo. Promover design a etapa quebraria os dois — ou os critérios congelam cedo demais, ou o visual é decidido longe do código.
 
 ## Artefatos de handoff
 
@@ -44,6 +45,7 @@ Cada etapa escreve uma nota de handoff; as etapas seguintes leem essa nota em ve
 
 ```
 <ciclo>/recon.md             discover escreve      spec + build leem      (condicional)
+<ciclo>/ux-spec.md           discover escreve      spec + build leem      (condicional)
 <ciclo>/increment-spec.md    discover escreve      build + verify (plan) leem
 <ciclo>/build-report.md      build escreve         verify (gate) lê
 <ciclo>/test-plan.md         verify (plan) escreve verify (gate) lê
@@ -62,7 +64,7 @@ Um artefato é um contrato: uma etapa não pode omitir em silêncio uma seção 
 
 ```yaml
 ---
-tipo: spec                  # ciclo | recon | spec | plano | build | veredito | estagio | contrato | paradigma | backlog | home
+tipo: spec                  # ciclo | recon | ux | spec | plano | build | veredito | estagio | contrato | paradigma | backlog | home
 ciclo: 2026-09-checkout
 estagio: "[[pipeline/stages/discover]]"
 status: rascunho            # rascunho | em-revisao | pronto | bloqueado | superado
@@ -91,7 +93,7 @@ tags:
 | Tag | Em |
 |---|---|
 | `#pipeline/ciclo` | nota-hub do ciclo |
-| `#pipeline/recon` · `#pipeline/spec` · `#pipeline/plano` · `#pipeline/build` · `#pipeline/veredito` | os artefatos do ciclo |
+| `#pipeline/recon` · `#pipeline/ux` · `#pipeline/spec` · `#pipeline/plano` · `#pipeline/build` · `#pipeline/veredito` | os artefatos do ciclo |
 | `#pipeline/estagio` · `#pipeline/contrato` | notas fixas |
 | `#estagio/discover` · `#estagio/build` · `#estagio/verify` | toda nota do estágio |
 | `#ciclo/<nome-do-ciclo>` | toda nota do ciclo |
@@ -125,6 +127,7 @@ Cada tipo de nota tem um conjunto fixo de `##`, para os embeds e os links de ân
 | Tipo | Seções |
 |---|---|
 | `recon` | Resumo · O que já existe · Convenções em vigor · O que não pode quebrar · Já quebrado ou morto · Por onde começar a ler |
+| `ux-spec` | Resumo · Fluxo · Estados · O que o usuário lê · Acessibilidade · O que o usuário nunca deve ver |
 | `increment-spec` | Resumo · Problema · Incremento · Critérios de aceite · Não-objetivos · Definition of Ready · Definition of Done |
 | `test-plan` | Resumo · Verificações · Lacunas |
 | `build-report` | Resumo · Decisões estruturais · Itens · Como executar · Suspeitas |

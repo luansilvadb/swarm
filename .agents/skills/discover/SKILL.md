@@ -33,15 +33,19 @@ Read `docs/pipeline/backlog.md` before cutting scope — what is already deferre
 
    *Completion criterion*: exactly one increment, and every slice cut to get there is already written into `docs/pipeline/backlog.md` with the reason it was left out. "Everything" is not an answer. A non-goal that lives only in this cycle's spec gets re-discarded three cycles from now.
 
-4. **Derive the criteria.** Dispatch `criteria-writer` with the reconciled increment. It genuinely needs the increment first — this is the one real dependency inside the stage.
+4. **Design the interaction, when the increment has a user-facing interface.** Dispatch `ux-designer` with the reconciled increment and fold its return into `<cycle-dir>/ux-spec.md`. Skip it for a background job, a migration or an internal endpoint — an invented interface is worse than none.
+
+   *Completion criterion*: every state the user will see is named together with the case that fails for it, empty and error included. These become criteria in the next step, so a state missing here is a state nobody will ever test.
+
+5. **Derive the criteria.** Dispatch `criteria-writer` with the reconciled increment — and with `ux-spec.md` where it exists, since those states are criteria. It genuinely needs the increment first: this is the one real dependency inside the stage.
 
    *Completion criterion*: every item carries criteria a test could pass or fail, and no criterion restates the item.
 
-5. **Open the cycle.** If `<cycle-dir>/cycle.md` does not exist, create it from `docs/pipeline/templates/cycle.md`. It is the cycle's hub note, and the hub note — not the folder — is what appears in the graph.
+6. **Open the cycle.** If `<cycle-dir>/cycle.md` does not exist, create it from `docs/pipeline/templates/cycle.md`. It is the cycle's hub note, and the hub note — not the folder — is what appears in the graph.
 
    *Completion criterion*: the hub note exists and links the artifacts this cycle will produce — `recon` included, when it ran — whether or not they exist yet. An unresolved link in Obsidian is normal; a missing hub note is not.
 
-6. **Write `increment-spec.md`.** Start from `docs/pipeline/templates/increment-spec.md` and keep its headings and frontmatter keys — the templates are what hold the vault to one format, so inventing structure here breaks the graph downstream. Integrate the three returns into one document, resolving contradictions yourself; do not concatenate the specialists' outputs.
+7. **Write `increment-spec.md`.** Start from `docs/pipeline/templates/increment-spec.md` and keep its headings and frontmatter keys — the templates are what hold the vault to one format, so inventing structure here breaks the graph downstream. Integrate the three returns into one document, resolving contradictions yourself; do not concatenate the specialists' outputs.
 
    *Completion criterion*: `verify` can write a test plan from the spec alone without reading code, and `build` can scope the work from it without a follow-up question.
 
@@ -52,6 +56,7 @@ Read `docs/pipeline/backlog.md` before cutting scope — what is already deferre
 | `specialists/recon.md` | The current state, when the repository already has code |
 | `specialists/problem-framer.md` | Who suffers, the evidence, the cost of not acting |
 | `specialists/solution-shaper.md` | Candidate increments as vertical slices, with value and priority |
+| `specialists/ux-designer.md` | Flow, states, copy and accessibility — the states become criteria |
 | `specialists/criteria-writer.md` | DoR, DoD and per-item acceptance criteria |
 
 Dispatch only the specialists this cycle actually raises. A one-line fix needs `criteria-writer` and nothing else.

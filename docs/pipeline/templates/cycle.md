@@ -20,6 +20,8 @@ Emergindo de [[pipeline/cycles/<nome-do-ciclo>/increment-spec|spec]] —
 
 | Artefato | Etapa | Status |
 |---|---|---|
+| [[pipeline/cycles/<nome-do-ciclo>/recon\|recon]] | discover (condicional) | — |
+| [[pipeline/cycles/<nome-do-ciclo>/ux-spec\|ux-spec]] | discover (condicional) | — |
 | [[pipeline/cycles/<nome-do-ciclo>/increment-spec\|increment-spec]] | discover | rascunho |
 | [[pipeline/cycles/<nome-do-ciclo>/test-plan\|test-plan]] | verify (plan) | — |
 | [[pipeline/cycles/<nome-do-ciclo>/build-report\|build-report]] | build | — |
