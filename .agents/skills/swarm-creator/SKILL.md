@@ -21,7 +21,7 @@ Cada unidade responde a uma pergunta cognitiva central. Crie arquivos por necess
 2. Liste as perguntas do agente e compare-as com as unidades existentes; marque lacunas, redundâncias e conteúdo fora do escopo.
 3. Para cada lacuna, crie uma unidade com uma única responsabilidade e nome/localização coerentes. Inclua dependências, limites e exemplos somente quando úteis.
 4. Valide cada unidade. Repita enquanto houver lacunas relevantes, respeitando **PARADA**.
-5. Gere ou atualize `SKILL.md`, o índice de unidades e a ordem de injeção; valide a árvore completa.
+5. Gere ou atualize `SKILL.md`, o índice de categorias e unidades e a ordem de injeção; valide a árvore completa.
 
 ## VALIDAÇÃO DE UNIDADE
 
@@ -52,9 +52,9 @@ Enquanto houver lacunas relevantes no domínio, crie apenas as categorias e unid
 
 ## SKILL.md
 
-Deve declarar função, escopo, anti-escopo, organização, ordem de injeção, índice das unidades (nome + pergunta), limites e critérios de parada. Não replique nele o conhecimento das unidades.
+Deve declarar função, escopo, anti-escopo, organização das categorias, ordem de injeção, índice das categorias (propósito) e unidades (nome + pergunta), limites e critérios de parada. Não replique nele o conhecimento das unidades.
 
-Injete `SKILL.md` primeiro, depois unidades sem dependências e, por fim, as dependentes. Sem dependências, selecione apenas as unidades relevantes à tarefa.
+Categorias são apenas organizacionais e não entram na ordem de injeção. Injete `SKILL.md` primeiro e, depois, apenas as unidades relevantes: primeiro as sem dependências, depois as dependentes.
 
 ## TEMPLATE DA UNIDADE
 
