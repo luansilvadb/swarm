@@ -18,6 +18,10 @@
   Regra de ouro: o harness relata, nunca decide. Quem decide é o humano — e o
   ledger só registra uma decisão com `answer_source: user`.
 
+  O ledger tem duas fases. No interrogatório, o grafo de perguntas fecha. Na execução,
+  cada decisão com critério de aceite vira promessa, e `met`/`waive` são a única saída.
+  A guarda vale nas duas: ela não pode morrer justamente quando começa a parte cara.
+
   Em qualquer erro no modo hook, sai calado com código 0: um hook quebrado não
   pode virar ruído no contexto de quem está trabalhando.
 #>
@@ -40,7 +44,12 @@ param(
   [string]$Ask = '',
   [string]$What = '',
   [string]$Source = '',
+  [string]$Why = '',
+  [string]$Axis = '',
+  [string]$Acceptance = '',
+  [string]$Evidence = '',
   [string]$Ledger = '',
+  [switch]$Perceived,
   [switch]$Force,
   [switch]$Hook
 )
@@ -57,6 +66,20 @@ $script:RiskRank = @{ 'low' = 1; 'medium' = 2; 'high' = 3 }
 
 $script:Statuses = @('open', 'decided', 'blocked_on', 'cut')
 $script:Types = @('choice', 'score', 'noul')
+
+# Eixos de um domínio percebido — o que é julgado olhando, não lendo. O piso existe
+# porque o fan-out nasce mais estreito exatamente onde o agente tem menos inventário,
+# e é onde alguém vai olhar por dez segundos.
+$script:PerceivedAxesFloor = 4
+$script:PerceivedReferenceAxis = 'reference'
+
+# Nota durante o fan-out, erro na conclusão: são os achados que dizem que o grafo não
+# está fechado. Aqui eles deixam de ser aviso.
+$script:ConcludeBlockers = @('perceived-thin', 'perceived-no-reference', 'dup-axis', 'dangling-dependency')
+
+# Uma opção que junta duas coisas não decide nenhuma: é o mesmo defeito do `decides`
+# composto, aplicado ao menu — e é como uma decisão de qualidade vira lista de features.
+$script:BundledOption = '(?i)\+|\s+e\s+|\s+&\s+'
 
 function Get-Root {
   param($Evt)
@@ -278,6 +301,26 @@ function Get-Resolved {
   return $set
 }
 
+function Get-Unmet {
+  param($L)
+  # Depois de `conclude` o ledger não é mais um interrogatório: cada decisão com
+  # critério de aceite é uma promessa. Promessa sem evidência não fecha turno.
+  $out = @()
+  foreach ($d in (Get-Decisions $L)) {
+    if ([string](Get-Field $d 'status') -ne 'decided') { continue }
+    if (-not (Get-Field $d 'acceptance')) { continue }
+    if ((Get-Field $d 'met') -eq $true) { continue }
+    if ((Get-Field $d 'waived') -eq $true) { continue }
+    $out += $d
+  }
+  return $out
+}
+
+function Get-Ids {
+  param($Nodes)
+  return (@($Nodes | ForEach-Object { [string](Get-Field $_ 'id') }) -join ', ')
+}
+
 # Peel estrutural: marca, passada após passada, o nó cujas dependências já existem e
 # já estão marcadas. O que sobrar está dentro de um ciclo — ou pendurado abaixo dele.
 function Get-Peeled {
@@ -406,6 +449,24 @@ function Get-Findings {
       $f += (New-Finding 'note' 'unanchored-question' "$id · a pergunta não referencia nenhum fato do estado entre crases: ela pergunta no vazio.")
     }
 
+    $perceived = (Get-Field $d 'perceived') -eq $true
+    foreach ($o in $opts) {
+      if ("$o" -notmatch $script:BundledOption) { continue }
+      if ($perceived) {
+        $f += (New-Finding 'block' 'compound-option' "$id · opção '$o' junta duas coisas num domínio percebido: separadas são duas perguntas — juntas, o agente preenche o meio na hora de codar.")
+      } else {
+        $f += (New-Finding 'note' 'compound-option' "$id · opção '$o' parece juntar duas coisas: se é uma só, ignore; se não, decomponha.")
+      }
+    }
+    if ($perceived) {
+      if (-not [string](Get-Field $d 'axis')) {
+        $f += (New-Finding 'block' 'perceived-no-axis' "$id · domínio percebido sem ``axis``: sem eixo, o fan-out conta perguntas em vez de cobrir o que vai ser julgado.")
+      }
+      if (-not (Get-Field $d 'acceptance')) {
+        $f += (New-Finding 'block' 'perceived-no-acceptance' "$id · domínio percebido sem ``acceptance``: sem critério escrito, nada verifica se a entrega é a decisão.")
+      }
+    }
+
     foreach ($dep in @(Get-List $d 'depends_on')) {
       if (-not $map.ContainsKey([string]$dep)) {
         $f += (New-Finding 'note' 'dangling-dependency' "$id · depende de '$dep', que não existe (aceitável no fan-out, erro na conclusão).")
@@ -432,6 +493,9 @@ function Get-Findings {
         if ($risk -eq 'high' -and (Get-Field $d 'confirmed_by_user') -ne $true) {
           $f += (New-Finding 'block' 'risk-unconfirmed' "$id · risco alto sem ``confirmed_by_user``: decisão cara de desfazer exige confirmação explícita.")
         }
+        if ((Get-Field $d 'accepted_recommendation') -eq $true -and -not (Get-Field $d 'why')) {
+          $f += (New-Finding 'block' 'stamped-no-why' "$id · resposta igual à recomendação, sem ``why``: sem o porquê, o humano assinou o que o agente escreveu — o resultado vira o gosto default dele.")
+        }
       }
       'cut' {
         if (-not (Get-Field $d 'cut_reason')) {
@@ -443,6 +507,26 @@ function Get-Findings {
           $f += (New-Finding 'block' 'blocked-no-ask' "$id · bloqueada sem ``ask``: diga o que só o humano pode responder.")
         }
       }
+    }
+  }
+
+  # Cobertura do domínio percebido: mede a largura do fan-out onde ele costuma nascer
+  # fino, e não só a existência de cada nó.
+  $perceivedNodes = @($nodes | Where-Object { (Get-Field $_ 'perceived') -eq $true })
+  if ($perceivedNodes.Count -gt 0) {
+    $axes = @{}
+    foreach ($p in $perceivedNodes) {
+      $a = [string](Get-Field $p 'axis')
+      if (-not $a) { continue }
+      if ($axes.ContainsKey($a)) {
+        $f += (New-Finding 'note' 'dup-axis' "eixo '$a' declarado mais de uma vez: dois nós no mesmo eixo são profundidade onde faltava largura.")
+      } else { $axes[$a] = $true }
+    }
+    if (-not $axes.ContainsKey($script:PerceivedReferenceAxis)) {
+      $f += (New-Finding 'note' 'perceived-no-reference' "nenhum nó no eixo '$($script:PerceivedReferenceAxis)': o padrão do que é bom não foi nomeado — 'premium' fica valendo o que o agente achar que é.")
+    }
+    if ($axes.Count -lt $script:PerceivedAxesFloor) {
+      $f += (New-Finding 'note' 'perceived-thin' "domínio percebido com $($axes.Count) eixo(s), piso $($script:PerceivedAxesFloor): o fan-out nasceu estreito justamente onde o resultado é julgado olhando.")
     }
   }
 
@@ -488,6 +572,8 @@ function Format-Node {
   $out = "[grill] $Tag$id · $([string](Get-Field $D 'type')) · risco $([string](Get-Field $D 'risk'))"
   $out += "`n  decide:      $([string](Get-Field $D 'decides'))"
   $out += "`n  pergunta:    $([string](Get-Field $D 'instructions'))"
+  if ((Get-Field $D 'perceived') -eq $true) { $out += "`n  percebido:   eixo $([string](Get-Field $D 'axis'))" }
+  if (Get-Field $D 'acceptance') { $out += "`n  aceite:      $([string](Get-Field $D 'acceptance'))" }
   $opts = @(Get-List $D 'options')
   if ($opts.Count -gt 0) {
     $marked = @()
@@ -546,6 +632,9 @@ if ($Hook) {
   try {
     $raw = [Console]::In.ReadToEnd()
     if ([string]::IsNullOrWhiteSpace($raw)) { exit 0 }
+    # Um BOM na frente do JSON derruba o ConvertFrom-Json — e um hook que morre calado é
+    # pior do que um hook ausente: a guarda some sem ninguém perceber.
+    $raw = $raw.TrimStart([char]0xFEFF)
     $evt = $raw | ConvertFrom-Json
     $name = $evt.hook_event_name
     $root = Get-Root $evt
@@ -556,7 +645,7 @@ if ($Hook) {
 
       'SessionStart' {
         $L = Read-Ledger $path
-        $ctx = "[grill] Interrogatório com ledger. Comandos: new · fact · add · next · answer · block · cut · check · conclude · install · repair (`"$cmdLine`" <cmd>)."
+        $ctx = "[grill] Interrogatório com ledger. Comandos: new · fact · add · next · answer · block · cut · met · waive · check · conclude · install · repair (`"$cmdLine`" <cmd>)."
         if ($null -eq $L) {
           $ctx += "`nNenhum ``.grill.json`` no projeto: crie com ``new -Plan `"…`"`` antes da primeira pergunta."
           if (Test-Path -LiteralPath $path -PathType Leaf) {
@@ -567,7 +656,13 @@ if ($Hook) {
           $ctx += "`nLedger em aberto: $(Get-Field $L 'plan')"
           $ctx += "`n  decididas $($c.decided) · abertas $($c.open) · bloqueadas no humano $($c.blocked_on) · cortadas $($c.cut)"
           if (Get-Field $L 'awaiting') { $ctx += "`n  aguardando o humano: $(Get-Field $L 'awaiting')" }
-          if ((Get-Field $L 'concluded') -eq $true) { $ctx += "`n  concluído: o humano já confirmou o entendimento compartilhado." }
+          if ((Get-Field $L 'concluded') -eq $true) {
+            $ctx += "`n  concluído: o humano já confirmou o entendimento compartilhado."
+            $unmet = @(Get-Unmet $L)
+            if ($unmet.Count -gt 0) {
+              $ctx += "`n  execução em aberto: $($unmet.Count) critério(s) de aceite sem evidência ($(Get-Ids $unmet)) — enquanto isso o Stop não libera o turno. Cumpra com ``met -Id … -Evidence …``."
+            }
+          }
           else {
             $n = Get-NextNode $L
             if ($n) { $ctx += "`n  próxima pergunta: $([string](Get-Field $n 'id')) — pergunte só ela, com ``next``." }
@@ -592,19 +687,33 @@ if ($Hook) {
         $blocking = @(Get-Findings $L | Where-Object { $_.severity -eq 'block' })
         $next = $null
         $unasked = $false
-        if (-not (Get-Field $L 'awaiting') -and (Get-Field $L 'concluded') -ne $true) {
+        $concluded = (Get-Field $L 'concluded') -eq $true
+        if (-not (Get-Field $L 'awaiting') -and -not $concluded) {
           $next = Get-NextNode $L
           if ($next) { $unasked = $true }
         }
-        if ($blocking.Count -eq 0 -and -not $unasked) { exit 0 }
+        # A guarda não termina no interrogatório. Depois de `conclude`, cada decisão com
+        # critério de aceite é uma promessa; o turno não fecha enquanto ela não tiver
+        # evidência (`met`) ou a dispensa do humano (`waive`). É aqui que uma UI simples
+        # deixa de passar por entrega do que foi decidido.
+        $unmet = @()
+        if ($concluded) { $unmet = @(Get-Unmet $L) }
+        if ($blocking.Count -eq 0 -and -not $unasked -and $unmet.Count -eq 0) { exit 0 }
 
         $loop = [int]($(if (Get-Field $evt 'loop_count') { Get-Field $evt 'loop_count' } else { 0 }))
-        $reason = "[grill] o interrogatório não fecha assim."
+        $reason = if ($concluded) { "[grill] a execução não fecha assim." } else { "[grill] o interrogatório não fecha assim." }
         if ($loop -gt 0) { $reason += " (aviso $($loop + 1): o Trae libera o turno quando o limite do hook é atingido, então resolva aqui.)" }
         if ($unasked) { $reason += " Há pergunta pronta sem ser feita: $([string](Get-Field $next 'id')) `"$([string](Get-Field $next 'decides'))`"." }
         if ($blocking.Count -gt 0) { $reason += "`n$($blocking.Count) achado(s) bloqueante(s):" }
         foreach ($x in $blocking) { $reason += "`n  $($x.code) — $($x.message)" }
-        $reason += "`nPergunte uma (`"$cmdLine`" next), registre a resposta (`"$cmdLine`" answer -Id … -Value `"…`"), declare o corte (`"$cmdLine`" cut -Id … -Reason `"…`"), ou — se o humano disser que o entendimento está compartilhado — `"$cmdLine`" conclude."
+        if ($unmet.Count -gt 0) {
+          $reason += "`n$($unmet.Count) critério(s) de aceite sem evidência — $(Get-Ids $unmet):"
+          foreach ($u in $unmet) { $reason += "`n  $([string](Get-Field $u 'id')) — $([string](Get-Field $u 'acceptance'))" }
+        }
+        $reason += "`nPergunte uma (``$cmdLine next``), registre a resposta (``$cmdLine answer -Id … -Value … -Confidence 0..1``, com ``-Why`` quando a resposta for a recomendação), declare o corte (``$cmdLine cut -Id … -Reason …``), ou — se o humano disser que o entendimento está compartilhado — ``$cmdLine conclude``."
+        if ($unmet.Count -gt 0) {
+          $reason += "`nCumpra o critério com ``$cmdLine met -Id … -Evidence …``, ou peça a dispensa ao humano e registre com ``$cmdLine waive -Id … -Reason … -Confirmed``."
+        }
         @{ decision = 'block'; reason = $reason } | ConvertTo-Json -Depth 6 -Compress
         exit 0
       }
@@ -640,6 +749,7 @@ try {
       Write-Out "[grill] ledger criado — $($script:LedgerPath)"
       Write-Out "  plano: $Plan"
       Write-Out "  próximo: ``fact`` para o estado, depois ``add`` para cada pergunta candidata (fan-out antes da primeira pergunta)."
+      Write-Out "  domínio percebido (o que é julgado olhando): ``add -Perceived -Axis reference|palette|typography|space|layout|motion|states|copy -Acceptance `"…`"``."
       exit 0
     }
 
@@ -678,6 +788,30 @@ try {
         Write-Out "[grill] -Recommended '$Recommended' não está entre as opções ($($opts -join ' · ')). Fora do menu não entra."
         exit 1
       }
+      # Guardado já normalizado: a pergunta "a resposta é a recomendação?" precisa de uma
+      # resposta só, e `sim`/`yes` não podem virar duas.
+      $Recommended = [string](Test-OnMenu $Type $opts $Recommended)
+      # A validação roda onde a mutação acontece: um nó de domínio percebido declarado
+      # torto tem que doer agora, não dez turnos depois na conclusão.
+      if ($Perceived) {
+        if (-not $Axis) {
+          Write-Out "[grill] add -Perceived precisa de -Axis: o nó diz qual eixo do resultado julgado ele decide (reference, palette, typography, space, layout, motion, states, copy)."
+          exit 1
+        }
+        if (-not $Acceptance) {
+          Write-Out "[grill] add -Perceived precisa de -Acceptance: sem critério escrito, nada verifica depois se a entrega é a decisão."
+          exit 1
+        }
+        foreach ($o in $opts) {
+          if ("$o" -match $script:BundledOption) {
+            Write-Out "[grill] a opção '$o' junta duas coisas. Em domínio percebido isso não entra: um nó, um julgamento — decomponha e declare os nós."
+            exit 1
+          }
+        }
+      } elseif ($Axis) {
+        Write-Out "[grill] -Axis só faz sentido junto com -Perceived."
+        exit 1
+      }
       $deps = @($DependsOn -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
       $node = @{
         id           = $Id
@@ -690,6 +824,8 @@ try {
         status       = 'open'
       }
       if ($deps.Count -gt 0) { $node['depends_on'] = $deps }
+      if ($Perceived) { $node['perceived'] = $true; $node['axis'] = $Axis }
+      if ($Acceptance) { $node['acceptance'] = $Acceptance }
       $l.decisions = @(Get-Decisions $l) + $node
       Save-And-Report $l
       exit 0
@@ -740,6 +876,17 @@ try {
         Write-Out "  O humano respondeu algo que não foi previsto: declare a opção com ``add`` (uma pergunta nova) — nunca registre uma resposta fora do menu."
         exit 1
       }
+      # Concordar não é decidir. Quando a resposta é a própria recomendação, o humano não
+      # acrescentou informação nenhuma: sem o porquê nas palavras dele, o nó seria uma
+      # delegação com a assinatura dele, e o resultado vira o gosto default do agente.
+      $rec = [string](Test-OnMenu $type $opts ([string](Get-Field $node 'recommended')))
+      $accepted = ("$onMenu" -eq $rec)
+      if ($accepted -and -not $Why) {
+        Write-Out "[grill] '$Id' fecha na recomendação do agente. Registre o porquê com -Why, nas palavras do humano."
+        Write-Out "  Pergunte o critério dele antes de gravar — 'recomendado' sozinho não é uma decisão, é um carimbo."
+        Write-Out "  Se ele não tiver critério, o nó não está decidido: ``block -Id $Id -Ask `"…`"`` devolve a pergunta."
+        exit 1
+      }
       if ([string](Get-Field $node 'risk') -eq 'high' -and -not $Confirmed) {
         Write-Out "[grill] '$Id' é risco alto: só registre com -Confirmed, depois que o humano confirmar explicitamente."
         exit 1
@@ -753,9 +900,12 @@ try {
       Set-Field $node 'answer_source' 'user'
       Set-Field $node 'confidence' $Confidence
       Set-Field $node 'confirmed_by_user' ([bool]$Confirmed)
+      Set-Field $node 'accepted_recommendation' $accepted
+      Set-Field $node 'why' $Why
       Set-Field $node 'status' 'decided'
       if ("$(Get-Field $l 'awaiting')" -eq $Id) { Set-Field $l 'awaiting' '' }
       Write-Out "[grill] $Id = $onMenu  (confiança $Confidence$([string]::Concat($(if ($Confirmed) { ', confirmado pelo humano' } else { '' }))))"
+      if ($accepted) { Write-Out "  aceita como recomendada — porquê: $Why" }
       Save-And-Report $l
       exit 0
     }
@@ -786,6 +936,49 @@ try {
       Set-Field $node 'ask' $Ask
       if ("$(Get-Field $l 'awaiting')" -eq $Id) { Set-Field $l 'awaiting' '' }
       Write-Out "[grill] $Id bloqueada no humano — $Ask"
+      Save-And-Report $l
+      exit 0
+    }
+
+    'met' {
+      $l = Read-Ledger $script:LedgerPath
+      if ($null -eq $l) { Write-Out "[grill] nenhum ledger."; exit 1 }
+      $node = $null
+      foreach ($d in (Get-Decisions $l)) { if ("$([string](Get-Field $d 'id'))" -eq $Id) { $node = $d; break } }
+      if ($null -eq $node) { Write-Out "[grill] pergunta '$Id' não existe no ledger."; exit 1 }
+      if (-not (Get-Field $node 'acceptance')) { Write-Out "[grill] '$Id' não tem critério de aceite — não há o que cumprir aqui."; exit 1 }
+      # Evidência sem origem é invenção: a mesma regra do `fact`, aplicada à entrega.
+      if (-not $Evidence) {
+        Write-Out "[grill] met precisa de -Evidence: aponte onde o critério foi observado — arquivo:linha, URL ou o comando que mostrou."
+        exit 1
+      }
+      Set-Field $node 'met' $true
+      Set-Field $node 'evidence' $Evidence
+      Set-Field $node 'met_at' ((Get-Date).ToString('s'))
+      Write-Out "[grill] $Id cumprido — $([string](Get-Field $node 'acceptance'))"
+      Write-Out "  evidência: $Evidence"
+      Save-And-Report $l
+      exit 0
+    }
+
+    'waive' {
+      $l = Read-Ledger $script:LedgerPath
+      if ($null -eq $l) { Write-Out "[grill] nenhum ledger."; exit 1 }
+      $node = $null
+      foreach ($d in (Get-Decisions $l)) { if ("$([string](Get-Field $d 'id'))" -eq $Id) { $node = $d; break } }
+      if ($null -eq $node) { Write-Out "[grill] pergunta '$Id' não existe no ledger."; exit 1 }
+      if (-not (Get-Field $node 'acceptance')) { Write-Out "[grill] '$Id' não tem critério de aceite — não há o que dispensar."; exit 1 }
+      if (-not $Reason) { Write-Out "[grill] waive precisa de -Reason: dispensar um critério é rebaixar o que foi acordado, e isso tem motivo."; exit 1 }
+      # Quem rebaixa a barra é quem a subiu. O agente não dispensa o critério que ele
+      # mesmo escreveu para parecer que entregou.
+      if (-not $Confirmed) {
+        Write-Out "[grill] waive só com -Confirmed, depois que o humano aceitar o rebaixamento explicitamente."
+        exit 1
+      }
+      Set-Field $node 'waived' $true
+      Set-Field $node 'waive_reason' $Reason
+      Set-Field $node 'waived_by_user' $true
+      Write-Out "[grill] $Id dispensado pelo humano — $Reason"
       Save-And-Report $l
       exit 0
     }
@@ -836,20 +1029,37 @@ try {
       if ((Get-Field $l 'concluded') -eq $true -and $c.open -gt 0) {
         Write-Out "  [nota] open-at-conclude — $($c.open) pergunta(s) aberta(s) na conclusão: declare como corte ou registre como aceito."
       }
+      $unmet = @()
+      if ((Get-Field $l 'concluded') -eq $true) {
+        $unmet = @(Get-Unmet $l)
+        if ($unmet.Count -gt 0) {
+          Write-Out "  [nota] execucao-em-aberto — $($unmet.Count) critério(s) de aceite sem evidência ($(Get-Ids $unmet)): enquanto isso, o Stop não libera o turno."
+          foreach ($u in $unmet) { Write-Out "     $([string](Get-Field $u 'id')): $([string](Get-Field $u 'acceptance'))" }
+        }
+      }
       if (-not (Get-HookHealth (Get-Root))) {
         Write-Out "  [nota] hooks-sem-sinal — o Stop não deu sinal neste projeto: rode ``install`` e confirme Settings > Hooks."
       }
-      if ($blocking.Count -gt 0) { exit 1 }
+      if ($blocking.Count -gt 0 -or $unmet.Count -gt 0) { exit 1 }
       exit 0
     }
 
     'conclude' {
       $l = Read-Ledger $script:LedgerPath
       if ($null -eq $l) { Write-Out "[grill] nenhum ledger."; exit 1 }
-      $blocking = @(Get-Findings $l | Where-Object { $_.severity -eq 'block' })
+      $findings = @(Get-Findings $l)
+      $blocking = @($findings | Where-Object { $_.severity -eq 'block' })
       if ($blocking.Count -gt 0) {
         Write-Out "[grill] não dá para concluir com o ledger torto:"
         Fail-And-Exit $blocking 'nada foi concluído'
+      }
+      # Nota durante o fan-out, erro na conclusão: um grafo com fan-out fino ou com
+      # dependência pendurada não está fechado — e concluir aqui é enactar um plano
+      # que já se sabe incompleto.
+      $unfinished = @($findings | Where-Object { $script:ConcludeBlockers -contains $_.code })
+      if ($unfinished.Count -gt 0) {
+        Write-Out "[grill] não dá para concluir com o grafo aberto — isto vira bloqueio na conclusão:"
+        Fail-And-Exit $unfinished 'nada foi concluído'
       }
       Set-Field $l 'concluded' $true
       Set-Field $l 'awaiting' ''
@@ -857,10 +1067,27 @@ try {
       $c = Get-Counts $l
       Write-Out "[grill] entendimento compartilhado registrado — $(Get-Field $l 'plan')"
       Write-Out "  decidido:"
+      $decidedCount = 0
+      $stamped = 0
       foreach ($d in (Get-Decisions $l)) {
         if ([string](Get-Field $d 'status') -ne 'decided') { continue }
-        $mark = if ("$(Get-Field $d 'answer')" -eq "$(Get-Field $d 'recommended')") { 'recomendado' } else { "recomendado era $(Get-Field $d 'recommended')" }
+        $decidedCount++
+        $isStamp = (Get-Field $d 'accepted_recommendation') -eq $true
+        if ($isStamp) { $stamped++ }
+        $mark = if ($isStamp) { 'recomendado' } else { "recomendado era $(Get-Field $d 'recommended')" }
         Write-Out "   - $([string](Get-Field $d 'id')) = $([string](Get-Field $d 'answer'))  ($mark · confiança $([string](Get-Field $d 'confidence')))"
+        if (Get-Field $d 'axis') { Write-Out "     eixo percebido: $([string](Get-Field $d 'axis'))" }
+        if (Get-Field $d 'why') { Write-Out "     porquê: $([string](Get-Field $d 'why'))" }
+        if (Get-Field $d 'acceptance') { Write-Out "     aceite: $([string](Get-Field $d 'acceptance'))" }
+      }
+      # O recibo diz de quem é o plano. Um ledger inteiro fechado na recomendação do
+      # agente é um plano que o humano assinou sem escrever — e o resultado sai com a
+      # cara do gosto default de quem conduziu.
+      if ($decidedCount -gt 0) {
+        Write-Out "  carimbos: $stamped de $decidedCount decisão(ões) fecharam na recomendação do agente."
+        if ($stamped -eq $decidedCount) {
+          Write-Out "    todas — o humano não divergiu em nada. Trate o plano como seu, não como dele."
+        }
       }
       foreach ($d in (Get-Decisions $l)) {
         if ([string](Get-Field $d 'status') -ne 'cut') { continue }
@@ -868,6 +1095,11 @@ try {
       }
       if ($c.open -gt 0) { Write-Out "  aberto (não decidido): $(@(Get-Decisions $l | Where-Object { [string](Get-Field $_ 'status') -eq 'open' } | ForEach-Object { [string](Get-Field $_ 'id') }) -join ', ')" }
       if ($c.blocked_on -gt 0) { Write-Out "  bloqueado no humano: $(@(Get-Decisions $l | Where-Object { [string](Get-Field $_ 'status') -eq 'blocked_on' } | ForEach-Object { [string](Get-Field $_ 'id') }) -join ', ')" }
+      $unmet = @(Get-Unmet $l)
+      if ($unmet.Count -gt 0) {
+        Write-Out "  a cumprir — o interrogatório acabou, a guarda não. Cada critério abaixo precisa de ``met -Id … -Evidence …`` (ou ``waive -Id … -Reason `"…`" -Confirmed``, se o humano aceitar o rebaixamento):"
+        foreach ($u in $unmet) { Write-Out "   - $([string](Get-Field $u 'id')): $([string](Get-Field $u 'acceptance'))" }
+      }
       exit 0
     }
 
@@ -883,7 +1115,11 @@ try {
       Write-Out "  plano: $(Get-Field $l 'plan')"
       Write-Out "  decididas $($c.decided) · abertas $($c.open) · bloqueadas no humano $($c.blocked_on) · cortadas $($c.cut)"
       if (Get-Field $l 'awaiting') { Write-Out "  aguardando o humano: $(Get-Field $l 'awaiting')" }
-      if ((Get-Field $l 'concluded') -eq $true) { Write-Out "  concluído." }
+      if ((Get-Field $l 'concluded') -eq $true) {
+        Write-Out "  concluído."
+        $unmet = @(Get-Unmet $l)
+        if ($unmet.Count -gt 0) { Write-Out "  execução em aberto: $($unmet.Count) critério(s) de aceite sem evidência ($(Get-Ids $unmet))" }
+      }
       $n = Get-NextNode $l
       if ($n) { Write-Out "  próxima: $([string](Get-Field $n 'id')) (open, pronta — desbloqueia $(Get-DescendantCount $l ([string](Get-Field $n 'id'))))" }
       $blocking = @(Get-Findings $l | Where-Object { $_.severity -eq 'block' })
