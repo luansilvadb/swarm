@@ -75,11 +75,27 @@ $script:PerceivedReferenceAxis = 'reference'
 
 # Nota durante o fan-out, erro na conclusão: são os achados que dizem que o grafo não
 # está fechado. Aqui eles deixam de ser aviso.
-$script:ConcludeBlockers = @('perceived-thin', 'perceived-no-reference', 'dup-axis', 'dangling-dependency')
+$script:ConcludeBlockers = @('perceived-thin', 'perceived-no-reference', 'dup-axis', 'dangling-dependency', 'orphan-axis', 'compound-decides')
 
 # Uma opção que junta duas coisas não decide nenhuma: é o mesmo defeito do `decides`
 # composto, aplicado ao menu — e é como uma decisão de qualidade vira lista de features.
+# O que o harness enxerga é só o separador explícito: um composto escrito com hífen
+# (`premium-minimal`) passa por aqui e continua sendo um bundle — esse é do condutor.
 $script:BundledOption = '(?i)\+|\s+e\s+|\s+&\s+'
+
+# Vocabulário de cada eixo percebido. Serve a uma checagem só: um critério de aceite que
+# nomeia um eixo que nenhum nó declarou está medindo fora do interrogatório — e, pior,
+# vai ser dado como `met`, porque ninguém prometeu nada para verificar contra.
+$script:AxisVocabulary = @{
+  'reference'  = '(?i)refer[êe]nci|awwwards|premiad'
+  'palette'    = '(?i)paleta|\bcores?\b|fundo|header'
+  'typography' = '(?i)tipograf|\bfontes?\b|typeface'
+  'space'      = '(?i)espa[çc]|ritmo|densidade'
+  'layout'     = '(?i)layout|grade|\bgrid\b|coluna|bento'
+  'motion'     = '(?i)anima[çc]|transi[çc]|movimento|hover|micro-?intera'
+  'states'     = '(?i)\bloading\b|carregament|\berro|skeleton|vazio'
+  'copy'       = '(?i)microcopy|\bcopy\b|\btexto|reda[çc]|r[óo]tulo'
+}
 
 function Get-Root {
   param($Evt)
@@ -436,8 +452,10 @@ function Get-Findings {
     }
 
     if (-not (Get-Field $d 'decides')) { $f += (New-Finding 'block' 'no-decides' "$id · sem ``decides``: a pergunta não diz o que está decidindo.") }
-    elseif ("$(Get-Field $d 'decides')" -match '(?i)\s+e\s+|\s+and\s+|,') {
-      $f += (New-Finding 'note' 'compound-decides' "$id · ``decides`` parece juntar dois julgamentos: decomponha.")
+    elseif ("$(Get-Field $d 'decides')" -match '(?i)\s+e\s+|\s+and\s+') {
+      # Um `decides` que precisa de "e" pesa dois julgamentos e não fecha nenhum. Fica como
+      # nota no fan-out e vira bloqueio na conclusão: decompor depois de decidido é reabrir.
+      $f += (New-Finding 'note' 'compound-decides' "$id · ``decides`` junta dois julgamentos (bloqueia na conclusão): um nó, uma decisão.")
     }
     if (-not (Get-Field $d 'instructions')) { $f += (New-Finding 'block' 'no-instructions' "$id · sem ``instructions``: nada foi perguntado.") }
 
@@ -510,9 +528,18 @@ function Get-Findings {
     }
   }
 
+  # Eixo declarado é eixo com nó vivo: um nó cortado não cobre mais nada, então não conta
+  # como largura do fan-out nem satisfaz a referência obrigatória.
+  $declaredAxes = @{}
+  foreach ($d in $nodes) {
+    if ([string](Get-Field $d 'status') -eq 'cut') { continue }
+    $a = [string](Get-Field $d 'axis')
+    if ($a) { $declaredAxes[$a] = $true }
+  }
+
   # Cobertura do domínio percebido: mede a largura do fan-out onde ele costuma nascer
   # fino, e não só a existência de cada nó.
-  $perceivedNodes = @($nodes | Where-Object { (Get-Field $_ 'perceived') -eq $true })
+  $perceivedNodes = @($nodes | Where-Object { (Get-Field $_ 'perceived') -eq $true -and [string](Get-Field $_ 'status') -ne 'cut' })
   if ($perceivedNodes.Count -gt 0) {
     $axes = @{}
     foreach ($p in $perceivedNodes) {
@@ -528,6 +555,28 @@ function Get-Findings {
     if ($axes.Count -lt $script:PerceivedAxesFloor) {
       $f += (New-Finding 'note' 'perceived-thin' "domínio percebido com $($axes.Count) eixo(s), piso $($script:PerceivedAxesFloor): o fan-out nasceu estreito justamente onde o resultado é julgado olhando.")
     }
+  }
+
+  # O aceite é uma promessa. Uma promessa que nomeia um eixo sem nó mede algo que ninguém
+  # decidiu — e, como não há decisão para confrontar, ela acaba dada como `met` sem
+  # encontrar nada. Foi assim que "awwwards com tipografia marcante" passou sem tipografia.
+  foreach ($d in $nodes) {
+    if ([string](Get-Field $d 'status') -eq 'cut') { continue }
+    $acc = [string](Get-Field $d 'acceptance')
+    if (-not $acc) { continue }
+    $id = [string](Get-Field $d 'id')
+    foreach ($ax in $script:AxisVocabulary.Keys) {
+      if ($declaredAxes.ContainsKey($ax)) { continue }
+      if ($acc -notmatch $script:AxisVocabulary[$ax]) { continue }
+      $f += (New-Finding 'note' 'orphan-axis' "$id · o aceite fala de '$ax' e nenhum nó declara esse eixo (bloqueia na conclusão): a barra promete o que o interrogatório não decidiu.")
+    }
+  }
+
+  # Risco calibrado por baixo é como o portão de confirmação deixa de existir: um ledger
+  # inteiro em `low` nunca chega ao ponto em que a decisão cara precisa do humano.
+  $decidedNodes = @($nodes | Where-Object { [string](Get-Field $_ 'status') -eq 'decided' })
+  if ($decidedNodes.Count -ge 5 -and @($decidedNodes | Where-Object { [string](Get-Field $_ 'risk') -eq 'high' }).Count -eq 0) {
+    $f += (New-Finding 'note' 'risk-flat' "nenhum nó de risco alto em $($decidedNodes.Count) decisões: a confirmação explícita (-Confirmed) não foi usada — confira se alguma é mesmo barata de desfazer.")
   }
 
   return $f

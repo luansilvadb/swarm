@@ -14,14 +14,16 @@ You conduct. The harness holds the decisions, so nothing decided is lost between
 - **A question without declared alternatives is not a question.** Every node is a `choice` (options), a `score` (ordered levels) or a `noul` (yes/no), with the alternatives written out and one of them recommended. It forces the real decision space to be enumerated *before* asking, instead of asking something open and thinking afterwards.
 - **One node, one judgment.** A question that weighs two things answers neither. If `decides` needs an "and", it is two questions.
 - **Fan out first, ask one at a time.** Declare every candidate question up front — including the ones that only matter if an earlier answer goes a certain way — then ask strictly one per turn. The batching is for the graph, not for the human: three questions at once is bewildering.
-- **Facts go in one state; questions point at it.** A fact is recorded once with its source, and referenced between crases in the question. A fact without a source is an invention.
+- **Facts go in one state; questions point at it.** A fact is recorded once with its source, and referenced between crases in the question. A fact without a source is an invention. A fact every question cites and that says nothing (`repo vazio`) is anchoring in name only — the anchor has to be state the question actually reads.
 - **Decisions are the human's.** A node only closes with `answer_source: user`. Your confidence in your own recommendation is recorded, and below the floor (0.5) the node is *not* decided — it is a guess, and it goes back.
 - **Agreeing is not deciding.** A node whose answer *is* the recommendation closes only with `-Why`, in the human's own words. Without a reason the human added no information, and the outcome is the agent's default taste wearing the human's signature. `conclude` counts the stamps and says so out loud.
-- **A bundle decides nothing.** An option that joins two things (`premium+rich`) is two questions. In a domain judged by looking, the agent fills the middle at implementation time. One node, one judgment — the rule that guards `decides`, applied to the menu.
+- **A bundle decides nothing.** An option that joins two things (`premium+rich`) is two questions. In a domain judged by looking, the agent fills the middle at implementation time. One node, one judgment — the rule that guards `decides`, applied to the menu. The harness only sees `+`, `&` and ` e `; `premium-minimal` is the same bundle wearing a hyphen, and that one is on you.
 - **In a domain judged by looking, fan out deliberately wider.** The inventory in your head is thinnest exactly where a reviewer looks for ten seconds. Perceived nodes carry an `axis`, the set needs a named `reference`, and thin coverage is a `block` at conclusion.
 - **What it costs to be wrong scales with the risk.** A `risk high` node only closes with explicit `-Confirmed`. A reversible decision does not need the same ceremony as a destructive one.
+- **A gate nobody trips is not a gate.** `low` on every node reads as calibration and is usually avoidance: if undoing it is expensive, or it rests on something unproven — a third party, a scale, an award-level bar — it is not `low`. The confirmation gate exists only while something is allowed to be `high`.
 - **A cut is declared, never dropped.** A question you chose not to ask is a `cut` with a reason, and it appears in the receipt. The silently abandoned question is the one that bites during implementation.
 - **The guard outlives the interrogation.** A decision with an `acceptance` criterion is a promise. After `conclude`, the turn does not close while a criterion has no evidence (`met`) or the human's release (`waive`). The part that gets judged is the part that must not go unguarded.
+- **An acceptance may not name an axis no node declares.** A criterion promising `animations` and `typography` while no `motion` or `typography` node exists is a bar negotiated outside the interview — and it gets marked `met` anyway, because nothing was ever decided to check it against. The harness reads the vocabulary and blocks it at `conclude`.
 - **The run closes on the human's word.** `conclude` happens when they say the understanding is shared; until then the guard blocks the turn from closing on an unasked question.
 
 ## The harness
@@ -54,10 +56,10 @@ Some decisions are not read, they are looked at: the interface, the copy, the re
 
 The starting inventory — a floor to widen, not a fixed list: `reference` (what good looks like, named and linked when possible), `palette`, `typography`, `space` (density and rhythm), `layout` (grid and breakpoints), `motion`, `states` (empty, loading, error), `copy`.
 
-- `reference` is mandatory. With no named standard, "premium" means whatever was easiest to build.
+- `reference` is mandatory. With no named standard, "premium" means whatever was easiest to build. An ambition is not a standard: `awwwards` names a tier, not an example anyone can point at.
 - One axis, one node. Two nodes on the same axis (`dup-axis`) are depth where width was missing.
 - An option may not bundle two things. `premium+rich` is how a quality decision turns into a feature list, and the features are then chosen by the agent mid-implementation.
-- Fan out for all of them **before** asking the first. Mid-interview, coverage under four axes is a `note`; at `conclude` it is not — thin coverage, a missing `reference` and `dup-axis` all become `block`.
+- Fan out for all of them **before** asking the first. Mid-interview, coverage under four axes is a `note`; at `conclude` it is not — thin coverage, a missing `reference`, `dup-axis`, a `decides` that joins two judgments and an acceptance that names an undeclared axis all become `block`.
 
 ## The loop
 
@@ -78,7 +80,8 @@ Exit codes are a signal, not noise: the CLI exits `1` when it refuses (off-menu 
 
 `conclude` ends the interview, not the ledger. From then on every decided node that carries an `acceptance` is an open promise, and the same guard that held the interview holds the build: the turn does not close while a promise has neither `met` nor `waive`.
 
-- `met -Id … -Evidence "…"` — you observed the criterion, and the evidence points at where: a file and line, a URL, a command and its output. Claiming the criterion without a source is the same invention as a fact without one.
+- `met -Id … -Evidence "…"` — you observed the criterion, and the evidence points at where: a file and line, a URL, a command and its output. Claiming the criterion without a source is the same invention as a fact without one. A source that does not support the claim is the same invention too: `http://localhost:3000` and one hover transition do not demonstrate an award-level result.
+- `met` as you meet it. A batch of criteria stamped in the last seconds of the build is a receipt written after the fact — the criteria did not steer anything, they were reconciled with it.
 - `waive -Id … -Reason "…" -Confirmed` — the plan will not meet this and the human accepts the lowering. Only the human, and only confirmed: the agent does not lower the bar it wrote.
 - `conclude` prints the criteria next to the decisions, so the receipt is what you build against — not your memory of a conversation.
 
