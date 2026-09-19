@@ -1,0 +1,28 @@
+﻿{
+    "version":  1,
+    "hooks":  {
+                  "Stop":  [
+                               {
+                                   "hooks":  [
+                                                 {
+                                                     "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"D:\\swarm\\.agents\\skills\\grilling\\grill.ps1\" -Hook",
+                                                     "timeout":  30,
+                                                     "type":  "command"
+                                                 }
+                                             ],
+                                   "loop_limit":  2
+                               }
+                           ],
+                  "SessionStart":  [
+                                       {
+                                           "hooks":  [
+                                                         {
+                                                             "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"D:\\swarm\\.agents\\skills\\grilling\\grill.ps1\" -Hook",
+                                                             "timeout":  30,
+                                                             "type":  "command"
+                                                         }
+                                                     ]
+                                       }
+                                   ]
+              }
+}
