@@ -1,13 +1,13 @@
 ---
 name: swarm-creator
-description: Cria, refatora e extrai conhecimento para SKILLs de agentes.
+description: Crie, melhore e extraia conhecimento para SKILLs de agentes baseadas em domínios, projetos ou codebase.
 ---
 
 ## FUNÇÃO E ESCOPO
 
 Transforma um domínio, projeto ou codebase em uma SKILL acionável e suas unidades de conhecimento.
 
-Use para criar, refatorar ou reorganizar SKILLs e extrair padrões de projetos. Não use para executar tarefas do domínio ou substituir uma skill especializada.
+Use para criar, melhorar ou refatorar SKILLs e extrair padrões de projetos. Não use para executar tarefas do domínio ou substituir uma skill especializada.
 
 ## PRINCÍPIO
 
@@ -18,10 +18,11 @@ Cada unidade responde a uma pergunta cognitiva central. Crie arquivos por necess
 ## FLUXO
 
 1. Defina objetivo, escopo, anti-escopo, entradas, saídas, regras, exceções e restrições.
-2. Liste as perguntas do agente e compare-as com as unidades existentes; marque lacunas, redundâncias e conteúdo fora do escopo.
-3. Para cada lacuna, crie uma unidade com uma única responsabilidade e nome/localização coerentes. Inclua dependências, limites e exemplos somente quando úteis.
-4. Valide cada unidade. Repita enquanto houver lacunas relevantes, respeitando **PARADA**.
-5. Gere ou atualize `SKILL.md`, o índice de categorias e unidades e a ordem de injeção; valide a árvore completa.
+2. Gere as perguntas que o agente deve responder para realizar o objetivo.
+3. Compare com as unidades existentes; marque lacunas, redundâncias e conteúdo fora do escopo. Atualize, consolide ou remova unidades quando necessário; redundâncias, conteúdos fora do escopo e falhas na validação final ainda sem solução são ajustes pendentes.
+4. Para cada lacuna, defina ou reutilize a categoria adequada e crie uma unidade.
+5. Valide cada unidade. Repita os passos 2 a 5 enquanto houver lacunas ou ajustes pendentes.
+6. Gere ou atualize `SKILL.md`, o índice de categorias e unidades e a ordem de injeção; valide a árvore completa. Se falhar, corrija a causa e retome os passos 2 a 6; se não for possível, sinalize e pare.
 
 ## VALIDAÇÃO DE UNIDADE
 
@@ -32,11 +33,11 @@ A unidade deve:
 - não duplicar outra unidade;
 - declarar dependências e limites relevantes.
 
-Se falhar, refaça até 3 vezes; depois sinalize a unidade e pare.
+Se falhar, corrija ou recrie a unidade antes de continuar; se não for possível validá-la, sinalize-a e pare.
 
 ## PARADA
 
-Pare quando não houver lacunas relevantes, uma iteração não gerar unidade nova e não redundante, forem atingidas 10 iterações ou uma unidade continuar inválida após 3 tentativas. O critério é semântico; 10 é apenas o limite máximo.
+Pare quando não houver lacunas relevantes nem ajustes pendentes, quando uma iteração não gerar unidade nova nem resolver ajuste pendente, ou quando uma unidade não puder ser validada.
 
 ## ESTRUTURA
 
@@ -52,16 +53,16 @@ Enquanto houver lacunas relevantes no domínio, crie apenas as categorias e unid
 
 ## SKILL.md
 
-Deve declarar função, escopo, anti-escopo, organização das categorias, ordem de injeção, índice das categorias (propósito) e unidades (nome + pergunta), limites e critérios de parada. Não replique nele o conhecimento das unidades.
+A SKILL criada ou atualizada deve declarar função, escopo, anti-escopo, organização das categorias, ordem de injeção, índice das categorias (propósito) e unidades (nome + pergunta), limites e critérios de parada. Não replique nela o conhecimento das unidades.
 
-Categorias são apenas organizacionais e não entram na ordem de injeção. Injete `SKILL.md` primeiro e, depois, apenas as unidades relevantes: primeiro as sem dependências, depois as dependentes.
+Categorias são apenas organizacionais e não entram na ordem de injeção. Injete `SKILL.md` primeiro e, depois, apenas as unidades relevantes e suas dependências, respeitando a ordem de dependência.
 
 ## TEMPLATE DA UNIDADE
 
 ```markdown
 ---
 name: <slug>
-description: <pergunta que a unidade responde>
+description: <descrever a responsabilidade da unidade>
 ---
 
 ## PERGUNTA
@@ -86,5 +87,5 @@ description: <pergunta que a unidade responde>
 - uma responsabilidade por unidade;
 - categorias e arquivos justificados;
 - dependências e injeção claras;
-- `SKILL.md` com escopo, anti-escopo e limites;
-- nenhum arquivo vazio, duplicado ou fora do escopo.
+- `SKILL.md` da skill criada ou atualizada com função, escopo, anti-escopo, organização, índice das categorias (propósito) e unidades (nome + pergunta), ordem de injeção, limites e critérios de parada;
+- nenhuma unidade inválida, arquivo vazio, duplicado ou fora do escopo.
